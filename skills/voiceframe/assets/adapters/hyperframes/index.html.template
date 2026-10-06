@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>PROJECT_TITLE</title>
+  <style>html,body {margin:0;width:100%;height:100%;overflow:hidden} #root {position:relative;width:100%;height:100%}</style>
+  <script src="assets/gsap.min.js"></script>
+</head>
+<body>
+  <div id="root" data-composition-id="main" data-start="0" data-duration="TOTAL_DURATION" data-width="1920" data-height="1080">
+    <!-- Repeat hosts after replacing FRAME_ID, START, DURATION and FRAME_SRC.
+         Host id and child data-composition-id must match. -->
+    <div id="FRAME_ID" class="clip" data-composition-src="FRAME_SRC" data-start="START" data-duration="DURATION" data-track-index="1"></div>
+    <!-- Repeat audio clips from audio_meta.json. Each audio needs a unique id.
+         Keep audio duration equal to the actual media duration, leaving tail space in the host. -->
+    <audio id="voice-LINE_ID" src="VOICE_PATH" data-start="START" data-duration="AUDIO_DURATION" data-track-index="2"></audio>
+  </div>
+</body>
+</html>

@@ -1,0 +1,19 @@
+<template>
+  <div id="root" data-composition-id="FRAME_ID" data-start="0" data-duration="DURATION" data-width="1920" data-height="1080" style="position:absolute;inset:0;width:100%;height:100%">
+    <style>
+      /* Copy local @font-face declarations here before using named CJK fonts. */
+      #FRAME_ID-background {position:absolute;inset:0;background:#111111}
+      #FRAME_ID-title {position:absolute;inset:15%;display:flex;align-items:center;color:#F0ECE5;font:700 96px sans-serif}
+    </style>
+    <div id="FRAME_ID-background" class="clip" data-start="0" data-duration="DURATION" data-track-index="0"></div>
+    <div id="FRAME_ID-heading" class="clip" data-start="0" data-duration="DURATION" data-track-index="1">
+      <div id="FRAME_ID-title">TITLE</div>
+    </div>
+    <script>
+      // Load project-local GSAP once in index.html before child scripts run.
+      const timeline = gsap.timeline({paused:true});
+      timeline.fromTo('#FRAME_ID-title', {opacity:0, y:32}, {opacity:1, y:0, duration:0.6}, 0);
+      window.__timelines['FRAME_ID'] = timeline;
+    </script>
+  </div>
+</template>
