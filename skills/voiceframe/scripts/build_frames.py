@@ -436,7 +436,7 @@ def build_frame(n, dur, title, vo, style, media, cfg, cues, chapter=None, figure
                 f'var kick=document.getElementById("f{cid}-kick");'
                 + (f' tl.set(video,{{opacity:1}},0);' if opening else
                    f' tl.fromTo(video,{{opacity:0,scale:1.05}},{{opacity:1,scale:1,duration:1.2}},0.05);')
-                + f' tl.to(video,{{scale:1.1,duration:{max(dur - 1.26, 0.01):.2f},ease:"none"}},1.26);')
+                + f' tl.to(video,{{scale:1.1,duration:{max(dur - 1.26, 0.01):.2f},ease:"none"}},1.26);'
                 f' tl.fromTo(kick,{{opacity:0,y:-10}},{{opacity:1,y:0,duration:0.5}},0.15);'
                 f' tl.fromTo(bar,{{scaleX:0}},{{scaleX:1,duration:0.55}},0.28);'
                 f' tl.fromTo(ttl,{{opacity:0,y:40}},{{opacity:1,y:0,duration:0.85}},0.38);')
