@@ -614,3 +614,22 @@ python3 /path/to/voiceframe/scripts/build_frames.py --project /path/to/video --d
 ```
 
 详见 [模板使用](../templates.md)。自己写生成器的话，至少校验句号对齐与标题不丢不重，并报告素材重复度—— 这三类 bug 门禁都查不出来。
+
+## 长片渲染的磁盘约束与streaming（实测踩坑）
+
+**`-w 3` 在 macOS 上会落盘全部帧** —— 1007 秒 @30fps 需要约 **31 GB** 临时空间。如果可用空间不足 35 GB，渲染会在「Checking browser GPU」阶段直接失败：
+
+```
+Disk capture may need ~31321.7 MB of temporary frame storage,
+but only 33948.8 MB is free
+```
+
+**解法：加 `HF_CAPTURE_PARALLEL_STREAM=true`**，让多worker 也走流式编码（不落全部帧）：
+
+```bash
+HF_CAPTURE_PARALLEL_STREAM=true npx hyperframes render --workers 3 --quality draft
+```
+
+macOS 上默认多worker 是screenshot capture（落盘），只有显式开这个环境变量才切到 stream。Linux 上多worker 默认就走 BeginFrame capture（流式），所以同样的命令在 Linux 上不会遇到这个问题 —— **换平台时别照抄参数**。
+
+另外渲染失败会留下 `renders/work-*` 目录（可到几十 GB），重渲前务必清掉，否则几次就撑满磁盘。
