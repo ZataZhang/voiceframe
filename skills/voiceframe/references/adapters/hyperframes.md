@@ -262,7 +262,7 @@ cue_t = line_start + span * (前面字数累计 / 本句总字数)
 
 ## 批量生成帧的工程做法
 
-长片 67 帧不要手写。写一个 `build_frames.py`：读 STORYBOARD 元数据 → 按版式模板拼 HTML → 写 `frames.json`（含每帧版式/素材/时长/字幕数）→ 再用 `build_index.py` 生成 `index.html` 与时间轴 txt。改分镜后一键重建。
+长片可用内置 `build_frames.py`：读取 `audio_meta.json`、字幕、标题和素材配置，生成子帧与 `frames.json`，再按清单填写入口模板。当前未提供自动组装入口脚本，完整参数见 [模板使用](../templates.md)。
 
 生成时的两个必查项：
 
@@ -467,3 +467,143 @@ if (opening) {
 `tl.fromTo(video, {opacity: 0}, {opacity: 1, duration: 0.5}, 0)` 在 t=0 时首帧仍未解码，抽帧照样是黑的。`tl.set()` 无过渡、无补间，才保证第 0 帧可见。
 
 验证方式：`snapshot --frames 12` 后直接看 `frame-00-at-0s.png`，不要只看 contact sheet（采样点通常不在 0）。
+
+## 「该不该显示」和「能不能显示」必须分开（生成器陷阱）
+
+用户报「有一段是空的」，追下去是：某个句子的标题**整句丢失**了20 秒。根因是把两件不同的事混用一个变量：
+
+```python
+# ✗ 一个 None 同时表达「这句不需要标题」和「这个版式不显示标题」
+title = None if ln in titled else titles.get(ln)
+if title: titled.add(ln)
+if style == "data": title = None      # ← 这一句顺手把「已消费」标记也带走了
+```
+
+一句 20 秒的旁白拆成两帧：第1 帧是图表（自带标题文字，屏上不再重复），第 2 帧是普通画面。第 1 帧把标题消费掉了却自己不显示，第 2 帧就以为「这句已上过标题」而留空 —— **整句无标题**。
+
+修法：把「归属」和「渲染」分开，用pending 传递。
+
+```python
+if style == "data":
+    pending_title = title      # 交给下一帧接手
+    title = None               # 自己不显示
+elif pending_title is not None:
+    title, pending_title = pending_title, None
+```
+
+### 必须在生成后断言
+
+这类 bug 门禁查不出来（check 只看单帧，不看跨帧序列）。生成脚本末尾强制校验：
+
+```python
+shown = {}
+for m in meta:
+    if m.get("screen_title"):
+        shown[m["line"]] = shown.get(m["line"], 0) + 1
+lost = [ln for ln, v in titles.items() if v and ln not in shown and ln not in exempt]
+dup = {ln: n for ln, n in shown.items() if n > 1}
+if lost: raise SystemExit(f"标题整句丢失: {lost}")
+if dup:  raise SystemExit(f"标题重复上屏: {dup}")
+```
+
+**一个渲染决策不能连带改变数据归属。** 凡是「消费/标记」与「显示/隐藏」共用的变量，都要拆开。
+
+## 跨媒介素材必须先做风格迁移
+
+文章配图、网页截图、PDF 导出的图表 —— 这些是为**白底阅读**做的，直接贴进深色视频就是一块刺眼的补丁。
+
+**不要重新生成，也不要加边框衬底。** 最省力且效果最好的是**把底色改成目标底色**，让边界自然消失：
+
+```python
+PALETTE = {
+    '#f7f5f0': '#111111',   # 网页浅底 → ink-black（与画面同色，边界消失）
+    '#25364a': '#f0ece5',   # 深字 → cream
+    '#5c7180': '#888880',   # 次级 → cream-muted
+    '#c0c9ca': '#282826',   # 弱线 → line
+    '#e3a86e': '#e85d26',   # 橙块 → 品牌橙
+}
+```
+
+三步：换色板→ 字号放大 1.5×（网页靠字小精致，视频是远看）→ 裁掉 viewBox 四周空白（网页图表留白多，不裁会显得图形偏小偏移）。
+
+顺手删掉图内的 `<text class="title">` 与 `class="small"` —— 屏上已有左上角标签和底部图注，重复三份会让视觉重心偏移。
+
+裁 viewBox 时注意 SVG 元素结构不止一种，实测要覆盖：
+
+```python
+for pat in (r'<circle[^>]*cx="([\d.]+)"[^>]*cy="([\d.]+)"[^>]*r="([\d.]+)"',
+            r'<rect[^>]*x="([\d.]+)"[^>]*y="([\d.]+)"[^>]*width="([\d.]+)"[^>]*height="([\d.]+)"',
+            r'<line[^>]*x1="([\d.]+)"[^>]*y1="([\d.]+)"[^>]*x2="([\d.]+)"[^>]*y2="([\d.]+)"'):
+    ...
+```
+
+只用 `<circle>` + `<rect>` 会漏掉用 `<line>` 画坐标轴的象限图，裁剪直接抛 `min() arg is an empty sequence`。
+
+## 版式参数必须跟着栏宽走
+
+五种版式的标题栏宽从 290px 到 1700px 不等，却共用同一套标题字符串 ——`<br>` 硬拆的行在窄栏里会二次折行，孤字掉到第三行（「值得知道 / 不等于现在深入 / 学」）。
+
+排版参数与内容格式要一起按版式分支，不要指望一套默认值通吃。
+
+## 同一句拆多帧时，第二帧要有不同的承载（quote 版式）
+
+「一句话只上标题一次，后续帧留纯画面+字幕」是错的判断。实测25/64 帧（39%）这样处理，用户反馈「留空不太好」—— 画面在动、字幕在跑、什么都没有，观感就是空。
+
+**延续帧改用引文版式**：满屏视频 + 左侧暗角，左边一条橙线做引文引导线，42px cream 粗体放整句旁白（按标点断行，最多 4 行）。
+
+```css
+.q { position: absolute; left: 110px; top: 260px; width: 1000px;
+     border-left: 3px solid var(--orange); padding: 8px 0 8px 34px; }
+.q-line { font-size: 42px; font-weight: 700; line-height: 1.34; color: var(--cream);
+          text-shadow: 0 3px 16px rgba(0,0,0,0.9); }
+```
+
+这个改动**一箭三雕**：
+- 上部空间被占据，不再空
+- 原来那条孤立的装饰横线/竖线变成了引文的引导线，有了依附
+- 下部留白成为「给引文呼吸的空间」，而不是「忘了放内容」
+
+当前内置脚本从本帧字幕窗口提炼引文，限制最多四行，并保留逐条定时字幕。引文属于摘要，不能替代完整字幕；发布前检查两者位置与内容。
+
+### 引文行数必须设上限
+
+不设上限时某些句子会切出 8 行，直接压进底部字幕区触发 `content_overlap`：
+
+```python
+qlines = qlines[:4]     # 引文是精炼，不是把整段搬上屏
+```
+
+## 新增版式时，CSS 必须是「基础布局 + 独有元素」的完整集
+
+加 `quote` 版式时只把 `full` 的 CSS 改了个名字、另加 `.q`，结果**漏了 `.v` / `.scrim` / `.hr` / `.kicker` 的定义**。这些类没有样式 → 视频没有暗角遮罩 → 文字直接压在亮画面上 → 对比度掉到 **1.07:1**（门禁报了一整串）。
+
+```python
+QUOTE_CSS = """      /* 必须先有基础布局（与 full 一致），再加独有元素 */
+      .v { position: absolute; inset: 0; overflow: hidden; }
+      .v > video { ... }
+      .scrim { ... }
+      .hr { ... }
+      .kicker { ... }
+      .q { ... }          # ← 只有这一条是新的
+"""
+```
+
+**规则：复制一个已有版式改写时，把基础布局整段复制过来，只追加差异。** 漏一条的表现是「元素存在但样式全无」，比元素缺失更难查。
+
+## 版式判定所依赖的变量，必须在判定之前算好
+
+引文判定用 `cs`（该帧的字幕窗口）来确认「这一帧有没有内容」，但 `cs` 的计算写在版式判定之后 —— 表现是 `NameError: local variable 'cs' referenced before assignment`。
+
+生成器的执行顺序要显式排好：**帧起始秒 → 字幕窗口 → 版式判定 → 标题归属 → 生成 HTML**。同一批变量反复挪位置很容易漏。
+
+自查：版式判定里引用的每个变量，都能在上方找到赋值。
+
+## 用内置脚本，别手写生成器
+
+`scripts/build_frames.py` 已把这几轮的坑固化为代码 + 校验：批量建帧、五种版式、ASR 字幕挂载、标题归属、素材轮转、深色图表。
+
+```bash
+python3 /path/to/voiceframe/scripts/build_frames.py --project /path/to/video --dry-run
+```
+
+详见 [模板使用](../templates.md)。自己写生成器的话，至少校验句号对齐与标题不丢不重，并报告素材重复度—— 这三类 bug 门禁都查不出来。

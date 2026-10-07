@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="640" viewBox="0 0 1440 640" role="img" aria-labelledby="title desc">
+<title id="title">Voiceframe — Give your story a voice.</title>
+<desc id="desc">暖白纸色、黑色大字与朱红色画面，声波穿过层叠的取景框。</desc>
+<rect width="1440" height="640" fill="#f3f0e9"/>
+<g font-family="Arial, Helvetica, sans-serif" fill="#20211f">
+<text x="64" y="58" font-size="13" letter-spacing="3">VOICEFRAME / NARRATED VIDEO WORKFLOW</text>
+<text x="1376" y="58" text-anchor="end" font-size="13" letter-spacing="2">WORDS INTO WORLDS</text>
+<path d="M64 82H1376" stroke="#20211f" stroke-opacity=".25"/>
+<text x="55" y="253" font-size="165" font-weight="700" letter-spacing="-10">Voiceframe<tspan fill="#e05236">.</tspan></text>
+<text x="66" y="331" font-size="47" font-family="Georgia, 'Times New Roman', serif" font-style="italic" letter-spacing="-1">Give your story a voice.</text>
+<text x="68" y="405" font-size="19" font-family="'PingFang SC', 'Microsoft YaHei', sans-serif" fill="#66665f" letter-spacing="3">把故事讲清楚，让画面跟上声音。</text>
+<text x="68" y="554" font-size="12" letter-spacing="2">STORY FIRST.</text>
+<text x="68" y="578" font-size="12" letter-spacing="2" fill="#797971">VOICE LED. FRAME BY FRAME.</text>
+</g>
+<g transform="translate(950 175)">
+<rect x="46" y="0" width="350" height="316" rx="2" fill="none" stroke="#20211f" stroke-opacity=".18"/>
+<rect x="23" y="23" width="350" height="316" rx="2" fill="#e6e1d7" stroke="#20211f" stroke-opacity=".25"/>
+<rect x="0" y="46" width="350" height="316" rx="2" fill="#e05236"/>
+<path d="M23 94V70H47M303 70H327V94M23 314V338H47M303 338H327V314" fill="none" stroke="#f3f0e9" stroke-width="2"/>
+<g stroke="#f3f0e9" stroke-width="5" stroke-linecap="round">
+<path d="M39 193V215M55 182V226M71 165V243M87 185V223M103 143V265M119 163V245M135 124V284M151 157V251M167 181V227M183 150V258M199 173V235M215 137V271M231 159V249M247 178V230M263 170V238M279 188V220M295 195V213M311 200V208"/>
+</g>
+<text x="25" y="391" font-family="Arial, Helvetica, sans-serif" font-size="11" letter-spacing="2" fill="#66665f">THE VOICE BECOMES THE FRAME.</text>
+</g>
+<path d="M64 607H1376" stroke="#20211f" stroke-opacity=".25"/>
+</svg>

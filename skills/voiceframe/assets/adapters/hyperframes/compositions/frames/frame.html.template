@@ -1,19 +1,197 @@
 <template>
-  <div id="root" data-composition-id="FRAME_ID" data-start="0" data-duration="DURATION" data-width="1920" data-height="1080" style="position:absolute;inset:0;width:100%;height:100%">
+  <div
+    id="FRAME_ID"
+    data-composition-id="FRAME_ID"
+    data-width="1920"
+    data-height="1080"
+    data-duration="DURATION"
+    style="position: absolute; inset: 0; width: 100%; height: 100%"
+  >
     <style>
-      /* Copy local @font-face declarations here before using named CJK fonts. */
-      #FRAME_ID-background {position:absolute;inset:0;background:#111111}
-      #FRAME_ID-title {position:absolute;inset:15%;display:flex;align-items:center;color:#F0ECE5;font:700 96px sans-serif}
+      /* 中文字体必须随项目自带 —— 渲染机是干净 headless Chrome，无系统中文字体。
+         文件名以规范化族名开头 + 数字字重，字体发现逻辑靠前缀匹配。
+         骨架先用系统字体，通过 check 后再补 @font-face。 */
+      #FRAME_ID {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        font-family: "Noto Sans SC", sans-serif;
+        --ink: #111111;
+        --orange: #e85d26;
+        --cream: #f0ece5;
+        --cream-muted: #888880;
+        --line: #282826;
+      }
+      #FRAME_ID * {
+        box-sizing: border-box;
+      }
+
+      /* ── broll 画面 ─────────────────────────────────
+         降饱和保色相，不要 grayscale(1) —— 那会把素材原色全压掉，
+         用户看到的是「视频怎么都是黑白的」。saturate(0.3~0.6) 即可。 */
+      #FRAME_ID-media {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+      }
+      #FRAME_ID-media > video,
+      #FRAME_ID-media > img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        filter: saturate(0.42) contrast(1.16) brightness(0.5);
+        transform-origin: 50% 50%;
+      }
+      /* 压暗层：素材亮度差异很大（白底图表 vs 暗色机房），
+         统一压一层才能保证文字永远可读。 */
+      #FRAME_ID-dim {
+        position: absolute;
+        inset: 0;
+        background: rgba(17, 17, 17, 0.42);
+        pointer-events: none;
+      }
+      /* 左侧暗角：文字压左侧时用 */
+      #FRAME_ID-scrim {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+          100deg,
+          rgba(17, 17, 17, 0.94) 0%,
+          rgba(17, 17, 17, 0.72) 34%,
+          rgba(17, 17, 17, 0.12) 66%,
+          rgba(17, 17, 17, 0) 100%
+        );
+      }
+
+      /* ── 文字层 ─────────────────────────────────────
+         栏宽决定字号上限：窄栏里排长标题会二次折行、掉出孤字。 */
+      #FRAME_ID-kicker {
+        position: absolute;
+        left: 110px;
+        top: 88px;
+        font-size: 21px;
+        font-weight: 500;
+        letter-spacing: 0.32em;
+        color: var(--orange);
+      }
+      #FRAME_ID-title {
+        position: absolute;
+        left: 110px;
+        top: 340px;
+        width: 1000px;
+        font-size: 72px;
+        font-weight: 900;
+        line-height: 1.12;
+        letter-spacing: -0.025em;
+        color: var(--cream);
+        overflow-wrap: anywhere;
+      }
+      #FRAME_ID-bar {
+        position: absolute;
+        left: 110px;
+        top: 280px;
+        width: 110px;
+        height: 3px;
+        background: var(--orange);
+        transform-origin: left center;
+      }
+      .FRAME_ID-hairline {
+        position: absolute;
+        left: 110px;
+        right: 110px;
+        height: 1px;
+        background: var(--line);
+      }
+
+      /* ── 字幕 ───────────────────────────────────────
+         t 必须是**帧内相对时间**，不是母带绝对秒。
+         三重text-shadow 是白字压实拍画面可读的前提。 */
+      #FRAME_ID-subs {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 92px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        pointer-events: none;
+        z-index: 40;
+      }
+      #FRAME_ID-subs > div {
+        max-width: 1340px;
+        text-align: center;
+        font-size: 42px;
+        font-weight: 700;
+        line-height: 1.42;
+        color: var(--cream);
+        text-shadow: 0 3px 14px rgba(0, 0, 0, 0.92), 0 1px 3px rgba(0, 0, 0, 0.98),
+          0 0 22px rgba(0, 0, 0, 0.7);
+      }
     </style>
-    <div id="FRAME_ID-background" class="clip" data-start="0" data-duration="DURATION" data-track-index="0"></div>
-    <div id="FRAME_ID-heading" class="clip" data-start="0" data-duration="DURATION" data-track-index="1">
-      <div id="FRAME_ID-title">TITLE</div>
+
+    <div id="FRAME_ID-media">
+      <video
+        id="FRAME_ID-video"
+        class="clip"
+        data-start="0"
+        data-duration="DURATION"
+        data-track-index="0"
+        src="assets/broll/MEDIA.mp4"
+        muted
+        playsinline
+        preload="auto"
+        data-layout-allow-overflow
+      ></video>
     </div>
+    <div id="FRAME_ID-dim"></div>
+    <div id="FRAME_ID-scrim"></div>
+    <div id="FRAME_ID-hairline-top" class="FRAME_ID-hairline" style="top: 64px"></div>
+    <div id="FRAME_ID-hairline-bottom" class="FRAME_ID-hairline" style="bottom: 64px"></div>
+    <div id="FRAME_ID-kicker">SERIES LABEL</div>
+    <div id="FRAME_ID-bar"></div>
+    <div id="FRAME_ID-title">TITLE</div>
+
+    <!-- 字幕行由 build_frames.py 生成；手写时每行一个 div，class 用 sub-line -->
+    <div id="FRAME_ID-subs"></div>
+
+    <script src="assets/gsap-3.14.2.min.js"></script>
     <script>
-      // Load project-local GSAP once in index.html before child scripts run.
-      const timeline = gsap.timeline({paused:true});
-      timeline.fromTo('#FRAME_ID-title', {opacity:0, y:32}, {opacity:1, y:0, duration:0.6}, 0);
-      window.__timelines['FRAME_ID'] = timeline;
+      (function () {
+        var root = document.getElementById("FRAME_ID");
+        if (!root) return;
+
+        var video = document.getElementById("FRAME_ID-video");
+        var dim = document.getElementById("FRAME_ID-dim");
+        var kicker = document.getElementById("FRAME_ID-kicker");
+        var bar = document.getElementById("FRAME_ID-bar");
+        var title = document.getElementById("FRAME_ID-title");
+
+        // 必须 paused：渲染器靠逐帧 seek 定位。
+        // 注册名要与 data-composition-id 完全一致，否则报 timeline_id_mismatch。
+        var tl = gsap.timeline({ paused: true });
+
+        // 开场帧用 set 直接落到可见 —— fromTo(opacity:0) 在 t=0 时首帧未解码，抽帧是黑的
+        tl.set(video, { opacity: 1 }, 0);
+        tl.fromTo(dim, { opacity: 0 }, { opacity: 1, duration: 0.6 }, 0.2);
+        tl.fromTo(kicker, { opacity: 0, y: -10 }, { opacity: 1, y: 0, duration: 0.5 }, 0.15);
+        tl.fromTo(bar, { scaleX: 0 }, { scaleX: 1, duration: 0.55 }, 0.28);
+        tl.fromTo(title, { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.85 }, 0.38);
+
+        // 极慢 Ken Burns。preload="auto" 只给开场帧，全局加会让渲染器
+        // 为每个视频预提取帧、浏览器超时，check 门禁查不出来。
+        tl.to(video, { scale: 1.08, duration: DURATION_NUMBER, ease: "none" }, 0.9);
+
+        // 字幕逐条硬切入，时间用帧内相对秒
+        // tl.fromTo(document.getElementById("FRAME_ID-s0"),
+        //   { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.16 }, 0.0);
+        // tl.to(document.getElementById("FRAME_ID-s0"),
+        //   { opacity: 0, y: -8, duration: 0.14 }, 3.2);
+
+        window.__timelines = window.__timelines || {};
+        window.__timelines["FRAME_ID"] = tl;
+      })();
     </script>
   </div>
 </template>

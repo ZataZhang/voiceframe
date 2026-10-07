@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="300" viewBox="0 0 1440 300" role="img" aria-labelledby="title desc">
+<title id="title">From story to screen</title>
+<desc id="desc">三个制作阶段：叙事与分镜、声音与时间轴、制作与交付。</desc>
+<rect width="1440" height="300" fill="#20211f"/>
+<g fill="none" stroke="#f3f0e9" stroke-opacity=".18"><path d="M480 38V262M960 38V262"/></g>
+<g font-family="Arial, Helvetica, sans-serif">
+<g fill="#e8856c" font-size="12" letter-spacing="3"><text x="48" y="58">01 / STORY</text><text x="528" y="58">02 / VOICE</text><text x="1008" y="58">03 / FRAME</text></g>
+<g fill="#f3f0e9" font-family="'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="33"><text x="48" y="127">叙事与分镜</text><text x="528" y="127">声音与时间轴</text><text x="1008" y="127">制作与交付</text></g>
+<g fill="#bab9b2" font-family="'PingFang SC', 'Microsoft YaHei', sans-serif" font-size="18"><text x="48" y="175">从一个想法，到可审阅的画面。</text><text x="528" y="175">用真实音轨，组织画面的节奏。</text><text x="1008" y="175">在选定的应用中，完成作品。</text></g>
+<g fill="#bab9b2" font-size="11" letter-spacing="2"><text x="48" y="247">BRIEF / SCRIPT / STORYBOARD</text><text x="528" y="247">NARRATION / TIMELINE / CUES</text><text x="1008" y="247">ASSETS / EDIT / DELIVERY</text></g>
+<g fill="#e8856c" font-size="28"><text x="424" y="130">→</text><text x="904" y="130">→</text></g>
+</g></svg>
