@@ -107,7 +107,7 @@ npx hyperframes@0.8.137 add <name> # 装
 
 ---
 
-## check 门禁的「几何模型」（2026-10-06 殷鉴01 实战）
+## check 门禁的「几何模型」
 
 布局审计把文字 ink box 当作 **~1.4×font-size、以行框为中心**（CSS `line-height:0.82` 也照算）。实用推论：
 
@@ -147,3 +147,323 @@ storyboard 定稿 → frame-packets 生成每帧 packet（含 blueprint + 动效
 
 - 本机 Chrome 首次渲染要下载 chrome-headless-shell，node 直连被限流（~30KB/s）；curl 直链 `storage.googleapis.com/chrome-for-testing-public/<ver>/mac-arm64/…` 有 ~5MB/s，或用 `HYPERFRAMES_BROWSER_PATH` 指向已装的 Chrome
 - 160s 成片下载完成后 capture+encode 仅 ~2min，慢只在下载
+
+## preview 优先，render 最后
+
+**1007s / 67 帧的成片，`preview` 迭代、`render` 只跑一次。** render 要 13m50s（`-w 3`：capture 10m26s + encode 1m59s + assemble 38s），改一帧就重跑 14 分钟；而 preview 是浏览器实时播放，改完刷新就更新。
+
+```
+npx hyperframes preview    # 常驻后台，改文件自动重载
+npx hyperframes preview "<项目绝对路径>" --stop
+```
+
+Studio 在 `http://localhost:3003/#project/<project>`（project 名取 `package.json` 的 `name`）。
+
+### 必须硬刷新浏览器
+
+Studio 会缓存已加载的 composition。**删掉/替换帧文件后普通刷新可能仍显示旧内容**，必须 Cmd+Shift+R。判断「我改的东西到底生效没有」的方法：直接 `curl` Studio 端口上的帧文件，grep 一个新加的标记，确认服务端返回的是新内容，再去要求用户硬刷新。
+
+### 遗留文件会污染 Studio
+
+批量生成帧后**立刻删掉上一批的旧帧文件**。Studio 的帧列表会把目录里所有 HTML 都列出来（未必只列 index 引用的），用户可能点开一个早已不参与渲染的旧文件，然后误报「我改的东西没生效」。同理，`hyperframes lint/check <file>` 只接受**目录**，不接受单个文件路径。
+
+## 长片铺素材：文案主导会拍成文字墙
+
+**只做「分镜里的图解」几乎必然做成满屏文字。** 一次 20 分钟 / 67 帧的初稿全是「巨字 + 标注 + 图解」，被要求改混剪。
+
+**成片必须以真实画面承载，文字降到 30% 以下。** 「低密度、一帧一陈述」的设计原则不等于「一帧只有字」—— 低密度指的是**元素少**，不是**没有图像**。
+
+### 文字帧判据
+
+写分镜时逐帧问：**这一帧去掉所有文字后还剩什么？** 如果答案是「什么都没有」，这一帧就是文字墙。
+
+### 免费实拍素材来源
+
+| 站点 | 可用性 |
+|---|---|
+| **Mixkit** | ✅ 直链可下，无需 API key |
+| Coverr | ✅ 可达 |
+| Pexels / Pixabay | ❌ 403 挡爬虫 |
+
+Mixkit 直链模式（详情页 slug 里的数字即video id）：
+
+```
+https://assets.mixkit.co/videos/<id>/<id>-720.mp4     # 720p，单条 4–12MB
+https://assets.mixkit.co/videos/<id>/<id>-1080.mp4    # 1080p，单条可达 185MB
+```
+
+抓取分类页拿 slug 列表，再逐个拼直链批量下。**720p 足够**：progressive JPEG 截图/网页视频最终都是 720p 观感，1080p 只在源足够锐利时才值那 20 倍体积。
+
+清单要按**语义位置**分组，不是按外观（`city` / `circuit` / `data` / `code` / `abstract` / `office`），这样按帧号轮转时同一主题不会连续出现。
+
+### 素材覆盖率要算
+
+`Σ素材时长 / 成片时长` 低于 ~70% 就会被迫循环复用，观感上是明显的重复。下载前先按目标时长算缺口，别下十几条就开工。
+
+## 调色：不要用 grayscale「统一」
+
+**「统一色调」≠「压成黑白」。** 模板里给所有素材写了 `filter: grayscale(1)`，理由是「压掉杂色只保留品牌色」—— 结果 44 条素材全部变成黑白，被直接指出「视频怎么都是黑白的」。素材原色（霓虹、数据中心蓝、电路板青绿）本来就有信息量，压掉是净损失。
+
+正确做法 —— **降饱和 + 压暗，保留色相**：
+
+```css
+/* split 版式：文字区占 38%，画面可以稍亮 */
+filter: saturate(0.62) contrast(1.16) brightness(0.66);
+/* full 版式：满屏压更多，文字压在上面 */
+filter: saturate(0.58) contrast(1.18) brightness(0.5);
+/* 彩色照片 */
+filter: saturate(0.5) contrast(1.05) brightness(0.72);
+```
+
+`saturate(0.5~0.6)` 既压掉杂色又保留语义色，与设计系统不冲突；`brightness` 压到 0.5–0.7 保证白字可读。**确需中性色时用 `grayscale(0.2)` 局部，不要上1.0。**
+
+## broll 版式：半屏元素，不是背景板
+
+**禁止「broll 铺满全屏 + 居中压字幕」** —— 这是最低效的混剪，画面在动但没人看，因为观众的眼睛无处可落。
+
+四种可用版式（`split` 29 帧 / `full` 19 / `chapter` 10 / `data` 5 / `photo` 4 跑通的一组配比）：
+
+| 版式 | 结构 | 用在 |
+|---|---|---|
+| `split` | 左 62% 视频 + 右 38% 深色文字区，1px hairline 接缝，右侧渐变遮罩过渡 | **默认版式**，大多数帧 |
+| `full` | 满屏视频 + 左侧线性暗角 scrim，文字压左侧 | 纯抽象纹理素材 |
+| `chapter` | 纯色场 + 巨字（橙场用 ink 字，深场用 cream） | 章节卡，全片 6–10 个 |
+| `data` | 图表 SVG 分层揭示 + 窄标题栏 | 有原始数据图表时 |
+| `photo` | 满屏照片 + 极慢 Ken Burns（12s 推 6%） | 实拍照片帧 |
+
+**满屏 broll 只在素材本身是抽象纹理、且配色与设计系统同源时用**（例：橙色光斑 + 黑立方体隧道）。这类素材压字是强化而非低效。
+
+## 字幕必须做，位置随版式
+
+用户看完第一版成片的第二个反馈是「没有字幕」。**旁白视频默认需要硬字幕**，不是可选项。
+
+字幕切分规则：按 `。！？；` 切主块 → 超过 18 字按 `，、` 再切 → 仍超长的硬拆。**单块 ≤18 字**，时间按字数比例分配该句时长。
+
+```python
+# 关键：时间基准是 timeline 的实测音频起止，不是估算
+cue_t = line_start + span * (前面字数累计 / 本句总字数)
+```
+
+版式差异：
+
+```css
+/* split：字幕只占右侧 38%，绝不压画面 */
+.subs { left: 62%; bottom: 78px; }
+.sub-line { max-width: 640px; font-size: 31px; text-align: left; }
+/* full / photo / data / chapter：全宽居中 */
+.subs { left: 0; right: 0; bottom: 92px; }
+.sub-line { max-width: 1340px; font-size: 42px; text-align: center; }
+.sub-line { text-shadow: 0 3px 14px rgba(0,0,0,.92), 0 1px 3px rgba(0,0,0,.98), 0 0 22px rgba(0,0,0,.7); }
+```
+
+三重 text-shadow 是白字压实拍画面可读的前提。`z-index: 40` + `pointer-events: none`。
+
+`split` 的字幕覆写必须写在基础 `.subs` 规则**之后**（同优先级靠后），否则被基础规则覆盖 —— 表现为「字幕生成了但看不见」。
+
+## 批量生成帧的工程做法
+
+长片 67 帧不要手写。写一个 `build_frames.py`：读 STORYBOARD 元数据 → 按版式模板拼 HTML → 写 `frames.json`（含每帧版式/素材/时长/字幕数）→ 再用 `build_index.py` 生成 `index.html` 与时间轴 txt。改分镜后一键重建。
+
+生成时的两个必查项：
+
+- **帧内 `data-composition-id` 必须与 index 里的完全一致**，否则 lint 报 `timeline_id_mismatch`（注册名 `"01-city"` 对不上 `"01"`）。统一用纯数字 `"{cid}"`
+- **生成器里的 f-string 与 `replace` 容易出静默 bug**（如 `f"id=\"x-{t:.2f}\".replace('."','')` 会把 f-string 提前求值）。批量改文件前先备份，修完用脚本校验结构（帧数 / 字段完整 / 时长闭合）而不是肉眼扫
+
+## 校验脚本要按 Frame 块解析
+
+`re.findall(r'^- duration: ([\d.]+)s', s, re.M)` 会把 frontmatter、chapter map 表格里的数字一起数进去，得出「68 帧 / 时长 1022s」这种假报错。正解是按块切：
+
+```python
+for m in re.finditer(r'^## Frame (\d+).*?\n(.*?)(?=^## |\Z)', s, re.M | re.S):
+    d = float(re.search(r'^- duration: ([\d.]+)s', m.group(2), re.M).group(1))
+```
+
+## snapshot 抽帧会骗人
+
+**抽帧采样可能恰好落在两句字幕的间隙**，看起来「字幕没生效」，实际是采样时机问题。验证字幕要按 cue 的具体 `t` 值定点抽帧，或把采样密度调到足以覆盖最短字幕时长。
+
+## 从SCRIPT 直接建帧，不必先写 STORYBOARD（方法论类内容）
+
+有完整 `SCRIPT.md` + 实测 `audio_meta.json` 时，**可以跳过 STORYBOARD 直接建帧** —— 时间轴由音频决定，场景标题从 `SCRIPT.md` 的 `## Line N — 标题` 直接取。省掉一轮「分镜表 ↔ 时间轴」的双向同步。
+
+实测：37 句 3549 字 → 64 帧 / 865s，平均 13.5s/帧，版式分布 split 34 / full 18 / chapter 9 / data 3。
+
+切帧规则（与句长挂钩，不看字数）：
+
+```python
+k = 1 if dur <= 20 else (2 if dur <= 38 else 3)
+```
+
+### 帧标题的清洗
+
+`SCRIPT.md` 的标题常带内部标记，直接上屏会露出工程痕迹：
+
+```
+## Line 6 — 另一个人 (Frame 4)   →   标题显示「另一个人 (Frame 4)」  ✗
+```
+
+生成时必须剥掉尾部标记与全角括号后缀：
+
+```python
+raw = re.sub(r'\s*\(Frame[^)]*\)\s*$', '', title)
+raw = re.split(r'[（(]', raw)[0].strip()
+```
+
+副题同理——**不能与标题重复**。取旁白里第一个不等于标题的完整句：
+
+```python
+parts = [x.strip() for x in re.split(r'[。！？；]', voiceover) if len(x.strip()) >= 6]
+sub = next((c[:40] for c in parts if c not in title), '')
+```
+
+副题在实拍画面上必须加底衬，否则压不住：
+
+```css
+.sub { background: rgba(17,17,17,0.72); padding: 12px 16px; border-left: 2px solid var(--orange);
+       color: var(--cream); font-weight: 500; }
+```
+
+## 素材的色相冲突：降饱和压不住，必须换素材
+
+`saturate()` 只能压彩度，**压不掉色相**。紫红/洋红调素材（彩色数据 HUD、crypto 图形、霓虹营销页）在橙+黑系统里即使 `saturate(0.26)` 仍然是明显的一块紫 —— 与品牌橙直接冲突。
+
+**判断标准**：素材里有没有与品牌色竞争的第二个高饱和色相。有就换素材，不要试图用滤镜救。
+
+做法：在素材池常量里直接注释掉冲突项，并在池旁写明原因，让后来者知道是筛过的：
+
+```python
+# 剔除紫红调素材（b10/b11/b20/b21/b26/b31）—— 与橙+黑系统冲突，
+# 降饱和也压不住色相，只能换素材。
+"office": ["b12-…", "b13-…", "b16-…"],
+```
+
+遇到这类素材，`saturate` 的安全下限是 0.26–0.30；再低画面会发灰失去质感。
+
+## 系列标签是内容不是装饰
+
+帧里的 `kicker`（左上角系列标识）必须**按项目改**，不要沿用模板或上一个项目的文案。跨项目复用生成脚本时最容易漏掉这一项 —— 出来的片子会带着上一个系列的标签。生成脚本里用项目名拼：
+
+```python
+f'学不完才是常态 · AI 时代的学习判断'# 换项目时必改
+```
+
+## 字幕必须用 ASR 反推，不能按字数估算
+
+用户看完第一版给的唯一反馈之一是「字幕不同步」。**按字数比例分配时间轴必然会漂移** —— 估算基准与真实语音语速不同，长片累积到几秒后就肉眼可见。
+
+**正确做法：先渲染音频，再用 ASR 反推字幕时间。**
+
+```bash
+bl speech recognize --url assets/voice/master-oneshot.wav \
+  --model fun-asr --language zh --out asr-raw.json
+```
+
+`transcripts[0].sentences[]` 直接给出毫秒级句边界（`begin_time` / `end_time` / `text`），14 分钟音频约 145 句。这是唯一可靠的时间基准。
+
+流程因此变成：**TTS → ASR → 字幕 → 建帧 → 渲染**，而不是「估算时间轴 → 建帧 → 渲染」。
+
+### 一条 ASR 句拆多块时要瓜分时长
+
+ASR 句子常超过字幕长度上限（20 字）。**如果拆出来的多块共用同一个 `t`，它们会同时出现在画面上**：
+
+```python
+pieces = split_piece(text, max_chars)
+span = (e - b) / 1000
+weights = [max(len(x), 1) for x in pieces]
+acc = b / 1000
+for piece, w in zip(pieces, weights):
+    cues.append({'text': piece, 't': round(acc, 3), 'd': round(span * w / sum(weights), 3)})
+    acc += span * w / sum(weights)
+```
+
+生成后必须校验单调性 —— `monotonic: OK` 才算通过。
+
+### 帧内相对时间只能减一次
+
+字幕 cue 有两套时间基准：全局（ASR 绝对秒）和帧内（相对秒）。`cues_in_window()` 已经换算过一次，如果 `subs_markup()` 里再减一次 `FRAME_T0[n]`，**所有字幕时间都会变成 0**，表现为「所有字幕同时出现」。症状是抽帧看到多条字幕叠在一起。
+
+约定：**进入 `subs_markup()` 的 cue.t 必须是帧内相对时间**，函数内部不再做换算。
+
+## 上屏标题必须是论点，不是结构标记
+
+第二个致命问题：把 `SCRIPT.md` 的 `## Line N — 标题` 直接当上屏标题。那些标题是**写作时的结构标记**，观众看不懂：
+
+```
+## Line 6 — 另一个人 (Frame 4)      → 观众看到「另一个人」，完全不知道在讲什么
+## Line 14 — 四种迹象 (Frame 8)      → 观众看到「四种迹象」，不知道是哪四种
+## Line 19 — 第一个：三个月 (Frame 9) → 这是提纲，不是结论
+```
+
+配上不相干的 broll 更糟 —— **画面在动，标题在传递混乱，观众无处可落**。
+
+### 判据
+
+标题必须能回答「所以呢」。结构标记一律不上屏。
+
+| SCRIPT 标题 | 上屏标题 |
+|---|---|
+| 另一个人 (Frame 4) | 重要的知识 / 是相对目标说的 |
+| 四种迹象 (Frame 8) | 任务 + 缺口 + 后果 |
+| 两个例子 (Frame 3) | 值得知道 / 不等于现在深入学 |
+| 结语 (Frame 19) | 不是追上所有更新 / 是多一点把握 |
+
+把映射写成独立的 `titles.json`（Line → 标题或 `None`），生成时读它，别把映射硬编进生成器 —— 硬编的版本会漏掉句号对齐检查。
+
+```python
+titles = {1: None, 2: '学不完不是错觉', 3: '该对能力缺口警觉\n不必对清单焦急', ...}
+```
+
+`None` 表示该句不上标题（纯画面 + 字幕）。**一句话拆成多帧时，只有第一帧上标题**，其余留空，否则同一个标题连着出现两次。
+
+### 映射必须与SCRIPT 句号对齐
+
+写完映射先断言，避免多余键静默生效：
+
+```python
+assert set(titles) == {t['line'] for t in timeline}
+```
+
+（实测写多了 15 条映射，就是靠这个断言发现的。）
+
+## f-string 里不要放JS 注释
+
+Python f-string 生成 JS 时，`{{}}` 转义和注释混在一起会产生 `invalid_inline_script_syntax`。踩了两次的形态：
+
+```python
+# ✗ 注释里的花括号和中文标点一起进了 JS，语法直接崩
+if ({n} == 1):
+  // 开场帧不做揭开动画：第 0 秒必须已经有画面，否则片头是黑的
+
+# ✓ 先算成纯 JS 布尔常量，注释留在 Python 侧
+var opening = {str(n == 1).lower()};
+if (opening) {{
+```
+
+## 开场第 0 秒必须有画面
+
+第 0 秒抽出来全黑 —— 视频元素刚创建，首帧还没解码。三个改动一起做才有效：
+
+**`preload="auto"` 只能给开场帧加，绝不能全局加。** 全局加会让渲染器为每个视频预提取帧（实测 52 个视频 → 提取 19032 帧、`authoredTimedClipCount: 121`），浏览器直接超时：
+
+```
+[FrameCapture] window.__hf not ready after 45000ms.
+Page must expose window.__hf = { duration, seek }.
+```
+
+而且 `check` 门禁**查不出这个问题** —— 只有真渲染才暴露。生成器里按帧号条件注入：
+
+```python
+muted
+playsinline{' preload="auto"' if n == 1 else ''}
+```
+
+```js
+var opening = true;
+if (opening) {
+  tl.set(video, { opacity: 1 }, 0);   // 不是 fromTo，直接落到可见
+}
+```
+
+`tl.fromTo(video, {opacity: 0}, {opacity: 1, duration: 0.5}, 0)` 在 t=0 时首帧仍未解码，抽帧照样是黑的。`tl.set()` 无过渡、无补间，才保证第 0 帧可见。
+
+验证方式：`snapshot --frames 12` 后直接看 `frame-00-at-0s.png`，不要只看 contact sheet（采样点通常不在 0）。

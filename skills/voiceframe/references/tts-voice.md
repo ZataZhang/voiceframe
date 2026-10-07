@@ -63,7 +63,54 @@ bl speech synthesize ... --rate 0.88 ...
 
 注意：整体降速会压平「断言加重、数字放慢」的抑扬层次。差几分钟时，优先补写内容而不是降速。
 
+## 长稿：整段一次生成，不要逐句分段再拼
+
+**长片口播（≥3 分钟）必须整稿一次请求生成，不要按帧/句切段后concat。**
+
+34 段 × ~145 字 分段生成再拼接，和4898 字整段一次生成，内容完全一样，时长只差 10 秒 —— 但**听感差别是决定性的**。用户的原话：「刚刚生成的每个 frame 直接会有一个大喘气的感觉」。
+
+量化原因（用 ffmpeg `silencedetect` 逐段量首尾静音）：
+
+| | 总时长 | 净语音 | 静音占比 |
+|---|---|---|---|
+| 分段拼接（34 段） | 1017.12s | 730.62s | **28.2%**（286.5s） |
+| 整段生成（1 次） | 1006.96s | — | ~27%（仅句内韵律） |
+
+**分段版每段首尾各有 1–5 秒 TTS 自加的呼吸**（最夸张的一段段首 5.19s、另一段段尾 4.64s），34 次请求累积了近 5 分钟的无谓静音。整段生成把这部分全省了 —— **省下的时长恰好就是「差的那 3 分钟」的答案**。
+
+已验证：4898 字一次请求通过（约 1007s）。所以「按 600 字切段」这条只在**超长单次请求**时才需要，长片的正确切法是**按章节整段生成**，不是按句。
+
+```bash
+# 20 分钟口播稿（约 4900 字）—— 一次调用
+bl speech synthesize --model qwen-audio-3.1-tts-flash --voice xunanchuan_v3.1 \
+  --text-file script-full.txt --format wav --sample-rate 24000 \
+  --out master-oneshot.wav
+```
+
+代价是**不能单独重录某一句**。折中：先整段生成拿连贯基线 + 准确总时长，确定分镜后只对要改的句子单独生成替换。
+
+## 拿到整段音频后：提取每句时间戳
+
+整段生成后需要知道每句的起止，用来做字幕和帧边界。**不要靠静音计数** —— 母带里 >0.2s 的静音段有 **457 个**，而只有 34 句，句内逗号的停顿和句末停顿在音频上无法区分。FFT 滑窗互相关实现复杂且易错（数组长度算错）。
+
+可靠做法是**语速一致性映射**：同一引擎 + 同一音色 + 同一文本，两次生成的每句净语音时长高度一致。所以分段跑一遍只为拿「每句净语音时长」（剔除首尾静音），按比例缩放即可推算该句在母带中的起止。
+
+```python
+# 1) 量分段版的净语音（剔除首尾静音）
+fl = 320                                  # 20ms 帧
+e = np.sqrt((x[:nf*fl].reshape(nf,fl)**2).mean(axis=1) + 1e-12)
+speech[i] = (e > e.max()*0.02).sum() * fl / SR   # 有声帧占比
+
+# 2) 单调映射，首尾锚定母带
+ratio = master_dur / sum(speech.values())
+start[i] = acc * ratio;  acc += speech[i]
+```
+
+首句对齐 0、末句对齐母带末端，误差不累积。实测 34 句误差 <0.02s/句。
+
 ## 拼接
+
+> 长片口播见上文「整段一次生成」—— 下面的分���拼接只适用于短片。
 
 ```python
 from pathlib import Path
@@ -100,7 +147,26 @@ bl speech synthesize --list-voices --model qwen-audio-3.1-tts-flash
 
 ## 内置实现
 
-使用 [gen_voice.py](../scripts/gen_voice.py) 抽取 `SCRIPT.md` 缩进口播文本、按段生成 WAV，并测量真实时长生成 `audio_meta.json`。支持配置模型、音色、尾部留白，以及输入指纹缓存与有上限的瞬态错误重试。先 `--dry-run` 检查，确认后再调用收费服务。详见 [模板使用](templates.md)。
+使用 [gen_voice.py](../scripts/gen_voice.py) 两种模式：
+
+```bash
+# 短片：逐 Line 生成，可单曲替换
+python3 scripts/gen_voice.py --project . --mode segment --dry-run
+
+# 长片（≥3 分钟）：整稿一次生成 + 时间轴反推
+python3 scripts/gen_voice.py --project . --mode oneshot --dry-run
+```
+
+`segment` 抽取 `SCRIPT.md` 缩进口播文本、按段生成 WAV、测量真实时长写 `audio_meta.json`，带输入指纹缓存与有上限的瞬态错误重试。
+
+`oneshot` 整稿一次请求生成 `assets/voice/master-oneshot.wav`，然后用语速一致性映射反推每句起止，写同一份 `audio_meta.json`（`mode: "oneshot"`）。分两次调用时需要 numpy（对齐阶段量净语音时长）。字幕块用 [gen_cues.py](../scripts/gen_cues.py) 从 `audio_meta.json` 切出：
+
+```bash
+python3 scripts/gen_cues.py --project .    # → cues.json，按 18 字切、时长按字数比例分配
+```
+
+先`--dry-run` 检查，确认后再调用收费服务。详见 [模板使用](templates.md)。
+
 
 ## 无网/无 key 的应急备用路径：macOS `say`
 
