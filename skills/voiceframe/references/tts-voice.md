@@ -159,11 +159,13 @@ python3 scripts/gen_voice.py --project . --mode oneshot --dry-run
 
 `segment` 抽取 `SCRIPT.md` 缩进口播文本、按段生成 WAV、测量真实时长写 `audio_meta.json`，带输入指纹缓存与有上限的瞬态错误重试。
 
-`oneshot` 整稿一次请求生成 `assets/voice/master-oneshot.wav`，然后用语速一致性映射反推每句起止，写同一份 `audio_meta.json`（`mode: "oneshot"`）。分两次调用时需要 numpy（对齐阶段量净语音时长）。字幕块用 [gen_cues.py](../scripts/gen_cues.py) 从 `audio_meta.json` 切出：
+`oneshot` 整稿一次请求生成 `assets/voice/master-oneshot.wav`，然后用语速一致性映射反推每句起止，写同一份 `audio_meta.json`（`mode: "oneshot"`）。分两次调用时需要 numpy（对齐阶段量净语音时长）。字幕块由 [gen_cues.py](../scripts/gen_cues.py) 用 ASR 从整段音频反推毫秒级句边界：
 
 ```bash
-python3 scripts/gen_cues.py --project .    # → cues.json，按 18 字切、时长按字数比例分配
+python3 scripts/gen_cues.py --project .    # → cues-asr.json，按 ASR 句边界对齐
 ```
+
+不要退回按字数估算——长片会累积到几秒的不同步。`segment` 模式没有整段母带，需先拼出整段音频再用 `--audio` 指定。
 
 先`--dry-run` 检查，确认后再调用收费服务。详见 [模板使用](templates.md)。
 

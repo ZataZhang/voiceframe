@@ -24,7 +24,27 @@ python3 /path/to/voiceframe/scripts/gen_voice.py --project /path/to/new-video --
 
 AI 配音缓存用文本、模型、音色及采样率的指纹判定，改稿后会重新生成。写入新音频成功前保留旧文件；某段失败会停止，并保留已完成段落，下次可继续。索引仅在全部成功后更新，失败后不要把旧索引当作最新结果。
 
-`audio_meta.json` 包含 `voices`、`bgm`、`sfx`、总 `duration`；每段有 `line`、`frame`、`path`、`start`、`audio_duration` 与含留白的 `duration`。这些 start 是顺序播放独立音频段的时间，不能用于对齐另一条独立录制或独立合成的母带。背景音乐和音效默认为空。
+索引 `audio_meta.json` 包含 `voices`、`bgm`、`sfx`、总 `duration`；每段有 `line`、`frame`、`path`、`start`、`audio_duration` 与含留白的 `duration`。这些 start 是顺序播放独立音频段的时间，不能用于对齐另一条独立录制或独立合成的母带。背景音乐和音效默认为空。
+
+## 共享素材库
+
+多个视频项目共用一份素材库，模板在 `assets/library/ASSETS.md`。仓库内初始化一次：
+
+```bash
+mkdir -p shared/video-assets
+cp /path/to/voiceframe/assets/library/ASSETS.md shared/video-assets/ASSETS.md
+mkdir -p shared/video-assets/broll shared/video-assets/fonts
+```
+
+下载的素材存进库里并当场登记（来源、许可、原始链接、日期、画面内容）。项目不复制，用软链接指过去：
+
+```bash
+ln -s ../../../shared/video-assets/broll <项目>/assets/broll
+```
+
+软链接后 `frames.config.json` 的 pools 仍是相对项目根的路径，建帧脚本无需改动。交付单个项目前要把链接展开成实体文件。
+
+项目侧在 `PRODUCTION.md` 的「素材来源与授权」表登记用到的库 id 与内容。
 
 ## 可选 HyperFrames 模板
 
@@ -44,7 +64,7 @@ python3 /path/to/voiceframe/scripts/init_project.py /path/to/new-video --adapter
 
 ## 内置建帧脚本
 
-`build_frames.py` 读取 `audio_meta.json`（`timeline` 或 `voices`）、字幕和标题映射，输出子帧 HTML 与 `frames.json`。整段母带的 Line 边界来自比例估算，需先听音校对；ASR 只校准字幕句边界，不会自动校准 Line 边界。
+`build_frames.py` 读取时间轴（`audio_meta.json`，缺失时回退 `timeline.json`）、字幕和标题映射，输出子帧 HTML 与 `frames.json`。整段母带的 Line 边界来自比例估算，需先听音校对；ASR 只校准字幕句边界，不会自动校准 Line 边界。`--cues` 默认 `cues-asr.json`。
 
 以下命令在本仓库根目录运行；将 `../my-video` 替换为项目路径：
 
@@ -55,15 +75,15 @@ python3 skills/voiceframe/scripts/gen_voice.py --project ../my-video --mode ones
 # 2. 可选：SVG 图表转换。保留原图，彩色数据标记保持原色
 python3 skills/voiceframe/scripts/darken_figures.py --input ../my-video/assets/figures --output ../my-video/assets/dark
 
-# 3. 默认离线字幕：按实测音轨时长分配文本；发布前需试听校对
+# 3. 字幕：ASR 对齐句边界。经授权后调用百炼，母带默认 assets/voice/master-oneshot.wav
 python3 skills/voiceframe/scripts/gen_cues.py --project ../my-video
-# 可选 ASR：经授权后调用百炼，母带默认 assets/voice/master-oneshot.wav
-python3 skills/voiceframe/scripts/gen_cues.py --project ../my-video --asr
+# 调字幕块时复用已有 ASR 结果，不重跑、不重复付费
+python3 skills/voiceframe/scripts/gen_cues.py --project ../my-video --reuse
+# segment 模式无整段母带，需先拼出整段音频再用 --audio 指定
 
-# 4. 配置实际素材池和 titles.json 后建帧。离线模式默认读取 cues.json
-python3 skills/voiceframe/scripts/build_frames.py --project ../my-video --dry-run
-python3 skills/voiceframe/scripts/build_frames.py --project ../my-video
-# ASR 模式改用 --cues cues-asr.json
+# 4. 配置实际素材池和 titles.json 后建帧
+python3 skills/voiceframe/scripts/build_frames.py --project ../my-video --cues cues-asr.json --dry-run
+python3 skills/voiceframe/scripts/build_frames.py --project ../my-video --cues cues-asr.json
 
 # 5. 按 frames.json 填写入口模板，再在项目目录运行 lint / check
 ```

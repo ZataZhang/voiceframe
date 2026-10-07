@@ -108,17 +108,21 @@ python3 skills/voiceframe/scripts/gen_voice.py \
 
 已有整段录音可使用 `--mode oneshot --existing-audio`，默认读取 `assets/voice/master-oneshot.wav`。此时句子边界按文本字数比例估算。自录音频的降噪与后期方案见[音频后期](../skills/voiceframe/references/audio-post.md)，目前尚未实测。
 
-### 字幕：生成时间块
-
-音轨索引完成后，按标点与字数切分字幕：
+### 字幕：用ASR 对齐时间块
 
 ```bash
 python3 skills/voiceframe/scripts/gen_cues.py --project ../my-video
 ```
 
-输出 `cues.json`，每块包含文本、开始时间与时长。时间按字数比例分配，适合作为字幕编排起点；默认模式不调用语音识别，发布前需要校对。
+输出 `cues-asr.json`，每块包含文本、开始时间与时长。**ASR 直接给出毫秒级句边界**，是唯一可靠的时间基准；不再按字数估算，因为估算的时间轴随语速漂移，长片累积到几秒就明显不同步。
 
-可选 ASR 模式使用 `--asr`，需要已配置的百炼 `bl`，调用前确认费用授权。默认识别 `assets/voice/master-oneshot.wav` 并输出 `cues-asr.json`；也可通过 `--audio` 指定音频。ASR 句内拆块仍按字数分配时长，不提供词级强制对齐。
+脚本调用百炼 `bl speech recognize`，**调用前确认费用授权**。默认识别 `assets/voice/master-oneshot.wav`（`--mode oneshot` 的产物），可用 `--audio` 指定其他音频、`--model` 换识别模型。ASR 句内拆块按字数分配时长，不提供词级强制对齐。
+
+`--reuse` 复用已存在的 `asr-raw.json` 而不重跑 ASR——反复调字幕块时用得上，不必每次重新付费。
+
+若项目用 `--mode segment`（逐Line 生成，无整段母带），需先拼出整段音频再识别。
+
+脚本会做单调性校验：字幕时间必须不递减，出现乱序直接退出。
 
 ## 制作应用与交付
 
@@ -133,7 +137,7 @@ python3 skills/voiceframe/scripts/init_project.py \
 
 HTML 骨架仍需替换模板变量、准备本地资源并完成制作。具体检查与渲染方式见 [HyperFrames 适配指南](../skills/voiceframe/references/adapters/hyperframes.md)。
 
-其他应用通过通用文档、媒体素材和音频索引交接；目前没有内置自动导入转换器。配音脚本产出的 `audio_meta.json` 与 `cues.json` 是制作中间产物，最终成片需在所选应用中合成、检查并导出。
+其他应用通过通用文档、媒体素材和音频索引交接；目前没有内置自动导入转换器。配音脚本产出的 `audio_meta.json` 与 `cues-asr.json` 是制作中间产物，最终成片需在所选应用中合成、检查并导出。
 
 ## 上传与发布成片
 

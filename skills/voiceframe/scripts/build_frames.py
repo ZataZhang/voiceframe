@@ -350,10 +350,13 @@ def build_frame(n, dur, title, vo, style, media, cfg, cues, chapter=None, figure
         anim = (f'        var video=document.getElementById("f{cid}-video");'
                 f'var q=document.getElementById("f{cid}-q");'
                 f'var kick=document.getElementById("f{cid}-kick");'
-                f' tl.fromTo(video,{{opacity:0,scale:1.05}},{{opacity:1,scale:1,duration:1.2}},0.05);'
-                f' tl.to(video,{{scale:1.1,duration:{max(dur-1.26,0.01):.2f},ease:"none"}},1.26);'
-                f' tl.fromTo(kick,{{opacity:0,y:-10}},{{opacity:1,y:0,duration:0.5}},0.15);'
-                f' tl.fromTo(q,{{opacity:0,x:-24}},{{opacity:1,x:0,duration:0.8}},0.32);')
+                + (f' tl.set(video,{{opacity:1}},0);' if opening else
+                   f' tl.fromTo(video,{{opacity:0,scale:1.05}},{{opacity:1,scale:1,duration:1.2}},0.05);')
+                + (f' tl.set(q,{{opacity:1,x:0}},0);' if opening else
+                   f' tl.fromTo(q,{{opacity:0,x:-24}},{{opacity:1,x:0,duration:0.8}},0.32);')
+                + (f' tl.set(kick,{{opacity:1,y:0}},0);' if opening else
+                   f' tl.fromTo(kick,{{opacity:0,y:-10}},{{opacity:1,y:0,duration:0.5}},0.15);')
+                + f' tl.to(video,{{scale:1.1,duration:{max(dur - 1.26, 0.01):.2f},ease:"none"}},1.26);')
 
     elif style == "chapter":
         body = f"""    <div class="bg"></div>
@@ -433,7 +436,7 @@ def build_frame(n, dur, title, vo, style, media, cfg, cues, chapter=None, figure
                 f'var kick=document.getElementById("f{cid}-kick");'
                 + (f' tl.set(video,{{opacity:1}},0);' if opening else
                    f' tl.fromTo(video,{{opacity:0,scale:1.05}},{{opacity:1,scale:1,duration:1.2}},0.05);')
-                + f' tl.to(video,{{scale:1.1,duration:{max(dur-1.26,0.01):.2f},ease:"none"}},1.26);'
+                + f' tl.to(video,{{scale:1.1,duration:{max(dur - 1.26, 0.01):.2f},ease:"none"}},1.26);')
                 f' tl.fromTo(kick,{{opacity:0,y:-10}},{{opacity:1,y:0,duration:0.5}},0.15);'
                 f' tl.fromTo(bar,{{scaleX:0}},{{scaleX:1,duration:0.55}},0.28);'
                 f' tl.fromTo(ttl,{{opacity:0,y:40}},{{opacity:1,y:0,duration:0.85}},0.38);')
@@ -474,8 +477,9 @@ def build_frame(n, dur, title, vo, style, media, cfg, cues, chapter=None, figure
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--project", type=Path, required=True)
-    ap.add_argument("--timeline", default="audio_meta.json")
-    ap.add_argument("--cues", default="cues.json")
+    ap.add_argument("--timeline", default="audio_meta.json",
+                    help="时间轴文件；缺失时回退到 timeline.json")
+    ap.add_argument("--cues", default="cues-asr.json")
     ap.add_argument("--titles", default="titles.json")
     ap.add_argument("--config", default="frames.config.json")
     ap.add_argument("--dry-run", action="store_true")
@@ -486,10 +490,20 @@ def main():
     cfg = dict(DEFAULT_CONFIG)
     user = load_json(root / a.config, {})
     cfg.update(user)
-    audio = load_json(root / a.timeline, {})
+    # gen_voice.py 写 audio_meta.json；部分项目手工重命名成 timeline.json，两个都认。
+    # load_json 在文件缺失时返回空 dict，错误信息会指错文件，所以先查存在性。
+    tl_path = root / a.timeline
+    if not tl_path.exists():
+        alt = root / "timeline.json"
+        if a.timeline != "timeline.json" and alt.exists():
+            tl_path = alt
+        else:
+            sys.exit(f"缺时间轴文件：{tl_path}\n"
+                     f"（gen_voice.py 的产物；或用 --timeline 指定）")
+    audio = load_json(tl_path, {})
     tl = audio.get("timeline") or audio.get("voices") or []
     if not tl:
-        sys.exit(f"没有时间轴：{root / a.timeline}")
+        sys.exit(f"时间轴里没有 timeline/voices：{tl_path}")
     cues_raw = load_json(root / a.cues, None)
     if not (root / a.cues).exists():
         sys.exit(f"缺字幕文件：{root / a.cues}")
@@ -508,7 +522,7 @@ def main():
     previous_end = 0.0
     for item in tl:
         start, span = item["start"], item["duration"]
-        if not math.isfinite(start) or not math.isfinite(span) or span <= 0 or start < previous_end - 0.001:
+        if not math.isfinite(start) or not math.isfinite(span) or span <= 0 or start < previous_end - 0.05:
             sys.exit("音轨时间轴必须按开始时间排序、无重叠且时长为正")
         previous_end = start + span
 
