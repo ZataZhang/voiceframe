@@ -6,7 +6,7 @@
 - 目标时长（估值）：
 - 平台、画幅与分辨率：
 - 必须保留的事实及来源：
-- 配音：默认 qwen-audio-3.1-tts-flash / xunanchuan_v3.1；可按用户要求调整
+- 配音：默认阿里云百炼 Qwen TTS，模型 `qwen-audio-3.1-tts-flash` / 音色 `xunanchuan_v3.1`（许南川）/ 24 kHz WAV；用户可另行指定
 - 音乐与字幕需求：
 - 草稿确认记录：待审阅；记录确认范围与改动
 
